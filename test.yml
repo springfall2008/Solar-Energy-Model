@@ -1,0 +1,16 @@
+SOLAR_SIZE: 3                 # Solar size in kwh
+SOLAR_YIELD: 0.90             # At 1.0 each kwp will produce 1000 kwh a year - see https://www.jojusolar.co.uk/faqs-solar-power/ for table
+BATTERY_SIZE: 4.8             # Battery size in kwh
+BATTERY_DOD: 0.9              # Battery depth of discharge
+BATTERY_LOSS: 0.96            # Loss of energy between charging and discharging the battery
+BATTERY_PEAK_DRAW: 3.0        # Inverter size on the battery
+BATTERY_PEAK_CHARGE_RATE: 3.0 # Peak Battery charge rate, usually inverter size
+PRICE_DAY: 0.3                # Price at day rate in £
+PRICE_NIGHT: 0.075            # Price at night rate in £
+PRICE_FEEDIN: 0.04            # Feedin tarrif price in £
+INFLATION: 1.03               # Inflation rate for electricty price, 1.03 = 3%
+EQUIPMENT_COST: 8750          # Cost to install your equipment in £
+ANNUAL_BATTERY_LOSS: 0.984    # Annual loss of battery capacity
+YEARS: 15                     # Years to run the scenario for
+SUNRISE: sunrise.txt          # Sunrise data text file
+CONSUMPTION: consumption.csv  # Octupus consumption CSV data - at least 1 years worth
