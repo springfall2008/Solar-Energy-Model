@@ -20,6 +20,7 @@ CONFIG = {
     'BATTERY_DOD'  : 0.90,
     'BATTERY_PEAK_DRAW' : 3.0,
     'BATTERY_MAX_CHARGE_RATE' : 3.0,
+    'BATTERY_CHARGE_NIGHT' : True,
     'SOLAR_SIZE' : 0,
     'SOLAR_YIELD' : 1.0,
     'PRICE_DAY' : 0.30,
@@ -276,7 +277,7 @@ def run_scenario(show=True):
                   log.row("Spare", day, hour, use, solar_energy, spare_energy - left_over_energy, -left_over_energy, battery.charge)
             else:
                 # Charge battery on cheap rate?
-                if hour >= CONFIG['NIGHT_START'] and hour <= CONFIG['NIGHT_END']:
+                if hour >= CONFIG['NIGHT_START'] and hour <= CONFIG['NIGHT_END'] and CONFIG['BATTERY_CHARGE_NIGHT']:
                     to_battery = min(battery.can_charge(), CONFIG['BATTERY_MAX_CHARGE_RATE']) # max charge rate
                     grid.draw(to_battery - spare_energy, hour)
                     battery.do_charge(to_battery)

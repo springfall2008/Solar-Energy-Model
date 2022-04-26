@@ -5,6 +5,9 @@ BATTERY_DOD: 0.9              # Battery depth of discharge
 BATTERY_LOSS: 0.96            # Loss of energy between charging and discharging the battery
 BATTERY_PEAK_DRAW: 3.0        # Inverter size on the battery
 BATTERY_PEAK_CHARGE_RATE: 3.0 # Peak Battery charge rate, usually inverter size
+BATTERY_CHARGE_NIGHT: True    # When true the battery tries to charge at night rate
+NIGHT_START: 1                # Hour that night rate electricty starts e.g. 1 = am
+NIGHT_END: 5                  # Hour that night rate electricty has ended, e.g. 5 means ends at 4:59am
 PRICE_DAY: 0.3                # Price at day rate in £
 PRICE_NIGHT: 0.075            # Price at night rate in £
 PRICE_FEEDIN: 0.04            # Feedin tarrif price in £
