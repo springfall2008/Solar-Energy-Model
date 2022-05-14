@@ -4,7 +4,7 @@ BATTERY_SIZE: 4.8             # Battery size in kwh
 BATTERY_DOD: 0.9              # Battery depth of discharge
 BATTERY_LOSS: 0.96            # Loss of energy between charging and discharging the battery
 BATTERY_PEAK_DRAW: 3.0        # Inverter size on the battery
-BATTERY_PEAK_CHARGE_RATE: 3.0 # Peak Battery charge rate, usually inverter size
+BATTERY_MAX_CHARGE_RATE: 3.0 # Peak Battery charge rate, usually inverter size
 BATTERY_CHARGE_NIGHT: True    # When true the battery tries to charge at night rate
 NIGHT_START: 1                # Hour that night rate electricty starts e.g. 1 = am
 NIGHT_END: 5                  # Hour that night rate electricty has ended, e.g. 5 means ends at 4:59am
@@ -16,4 +16,7 @@ EQUIPMENT_COST: 8750          # Cost to install your equipment in £
 ANNUAL_BATTERY_LOSS: 0.984    # Annual loss of battery capacity
 YEARS: 15                     # Years to run the scenario for
 SUNRISE: sunrise.txt          # Sunrise data text file
-CONSUMPTION: consumption.csv  # Octupus consumption CSV data - at least 1 years worth
+CONSUMPTION: consumption.csv  # Octupus consumption CSV data - at least 1 years worth - or remove this to use profile
+
+PROFILE: [1,1,1,1,1,1,2,5,5,5,4,4,7,5,3,2,3,4,5,5,4,4,4,2] # Alternative to having consumption data, this gives a profile of the energy use per hour
+ANNUAL_USAGE: 9000            # KwH usage for the profile, only applies if you don't supply the CSV                 

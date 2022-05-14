@@ -21,6 +21,9 @@ CONFIG = {
     'BATTERY_PEAK_DRAW' : 3.0,
     'BATTERY_MAX_CHARGE_RATE' : 3.0,
     'BATTERY_CHARGE_NIGHT' : True,
+    'BATTERY_GROW' : 0,
+    'BATTERY_GROW_COST' : 1000,
+    'BATTERY_MAX' : 18,
     'SOLAR_SIZE' : 0,
     'SOLAR_YIELD' : 1.0,
     'PRICE_DAY' : 0.30,
@@ -31,7 +34,8 @@ CONFIG = {
     'INFLATION' : 1.03,
     'EQUIPMENT_COST' : 0,
     'YEARS' : 15,
-    'CONSUMPTION' : "consumption.csv",
+    'PROFILE' : [5.41, 8.82, 8.75, 7.21, 5.07, 3.32, 2.38, 3.07, 3.91, 3.99, 4.06, 4.38, 4.34, 3.43, 3.74, 3.75, 4.54, 4.93, 3.77, 3.08, 2.62, 2.55, 2.08, 0.81],
+    'ANNUAL_USAGE': 9915.0,
     'SUNRISE': "sunrise.txt"
 }
 
@@ -191,11 +195,22 @@ class cl_load:
 
     def load(self, kw):
         self.total_used += kw
-        
-    def __init__(self, filename):
-        self.data = {}
-        self.total_used = 0
-        
+    
+    def create_profile(self, profile, total):
+
+        profile_sum = 0.0
+        for hour in range(24):
+            profile_sum += profile[hour]
+        for hour in range(24):
+            profile[hour] = profile[hour] / profile_sum * 100.0
+            
+        for day in range(1, 365+1):
+            self.data[day] = {}
+            for hour in range(24):
+                usage = profile[hour] * total / 100 / 365
+                self.data[day][hour] = usage
+
+    def load_csv(self, filename):
         with open(filename, 'r') as han:
             last_hour = -1
             for line in han:
@@ -205,20 +220,72 @@ class cl_load:
                     if not fields[0].startswith('Consumption'):
                         energy = float(fields[0])
                         start_date, start_time = fields[1].split('T')
+                        end_date, end_time = fields[2].split('T')
                         start_time, offset_time = start_time.split('+')
+                        end_time, offset_end_time = end_time.split('+')
                         start = datetime.strptime(start_date.strip() + " " + start_time, '%Y-%m-%d %H:%M:%S')
+                        end   = datetime.strptime(end_date.strip()   + " " + end_time,   '%Y-%m-%d %H:%M:%S')
+
                         day_of_year = start.timetuple().tm_yday
-                        hour_of_day = start.hour
-                        if day_of_year not in self.data:
-                            self.data[day_of_year] = {}
-                        if hour_of_day not in self.data[day_of_year]:
-                            self.data[day_of_year][hour_of_day] = energy
-                        elif last_hour == hour_of_day:
-                            self.data[day_of_year][hour_of_day] += energy
-                        else:
-                            # If the data covers multiple years use the latest only
-                            self.data[day_of_year][hour_of_day] = energy
-                        last_hour = hour_of_day
+                        hour_of_day_start = start.hour
+                        hour_of_day_end = end.hour
+                        hours = hour_of_day_end - hour_of_day_start
+                        if (hours == 0):
+                            hours = 1
+
+                        for hour in range(hour_of_day_start, hour_of_day_start + hours):
+                            if day_of_year not in self.data:
+                                self.data[day_of_year] = {}
+                            if hour not in self.data[day_of_year]:
+                                self.data[day_of_year][hour] = energy / hours
+                            elif last_hour == hour_of_day_start:
+                                self.data[day_of_year][hour] += energy / hours
+                            else:
+                                # If the data covers multiple years use the latest only
+                                self.data[day_of_year][hour] = energy / hours
+
+                        last_hour = hour_of_day_start
+    
+    def validate_data(self, show):
+        self.hourly = [0 for i in range(24)]
+
+        for day in range(1, 365 + 1):
+            for hour in range(24):
+                if day not in self.data:
+                    print("ERROR: Input data is incomplete for day %d" % day)
+                    exit(1)
+                if hour not in self.data[day]:
+                    print("ERROR: Input data is incomplete for day %d hour %d" % (day, hour))
+                    exit(1)
+
+                # Count per hour
+                self.hourly[hour] += self.data[day][hour]
+        
+        # Create hourly profile
+        self.hourly_profile = [0 for i in range(24)]
+        total = sum(self.hourly)
+        for hour in range(24):
+            self.hourly_profile[hour] = self.hourly[hour] / total
+        
+        # Show profile
+        if show:
+            print("Total annual energy use: %0.2f kWh hourly profile:  " % total)
+            print("    ", end='')
+            for hour in range(24):
+                vstr = "%0.2f, " % (self.hourly_profile[hour] * 100.0)
+                print(vstr, end="")
+            print()
+
+    def __init__(self, filename, show, profile=None, total=3000.0):
+        self.data = {}
+        self.total_used = 0
+        
+        if filename:
+            self.load_csv(filename)
+        else:
+            self.create_profile(profile, total)
+        self.validate_data(show)
+        
                             
     def get_load(self, day, hour):
         if day in self.data:
@@ -228,11 +295,11 @@ class cl_load:
         return 0
 
     def show(self):
-        print ("Load used %lf kw" % self.total_used)
+        print ("Total engery load used %lf kWh" % self.total_used)
 
 def run_scenario(show=True):
     if show:
-        print ("---------- BATTERY %f SOLAR %f --------" % (CONFIG['BATTERY_SIZE'], CONFIG['SOLAR_SIZE']))
+        print ("---------- BATTERY %f SOLAR %f COST %0.2f--------" % (CONFIG['BATTERY_SIZE'], CONFIG['SOLAR_SIZE'], CONFIG['EQUIPMENT_COST']))
 
     if show:
         log = cl_logger("data_bat%f_sol%f.csv"  % (CONFIG['BATTERY_SIZE'], CONFIG['SOLAR_SIZE']))
@@ -249,7 +316,10 @@ def run_scenario(show=True):
     sun = cl_sun(CONFIG['SUNRISE'])
 
     # Octopus data
-    load = cl_load(CONFIG['CONSUMPTION'])
+    if 'CONSUMPTION' in CONFIG:
+        load = cl_load(CONFIG['CONSUMPTION'], show)
+    else:
+        load = cl_load(None, show, profile=CONFIG['PROFILE'], total=CONFIG['ANNUAL_USAGE'])
 
     # Create grid
     grid = cl_grid()
@@ -307,20 +377,7 @@ def run_scenario(show=True):
 
     return grid.cost
 
-
-def main():
-
-    parser = argparse.ArgumentParser(description='Solar and battery simulator')
-    parser.add_argument('config', help='yml configuration file name')
-    args = parser.parse_args()
-    
-    # Read config and override defaults
-    with open(args.config, 'r') as fhan:
-        yconfig = yaml.safe_load(fhan)
-        for item in yconfig:
-            CONFIG[item] = yconfig[item]
-    print(CONFIG)
-
+def simulate():
     total_cost = 0
     base_cost = 0
     year = 0
@@ -330,19 +387,59 @@ def main():
         CONFIG['BATTERY_SIZE'] = 0
         CONFIG['SOLAR_SIZE'] = 0
 
-        base_cost += run_scenario(False)
+        base_cost_year = run_scenario(False)
+        base_cost += base_cost_year
 
         CONFIG['BATTERY_SIZE'] = tempb
         CONFIG['SOLAR_SIZE'] = temps
-        total_cost += run_scenario(year==0)
+        annual_cost = run_scenario(year==0)
+        total_cost += annual_cost
         year += 1
 
-        print("Year %d - Total cost: %0.2f base cost %0.2f saving %0.2f" % (year, total_cost, base_cost, base_cost - total_cost - CONFIG['EQUIPMENT_COST']))
+        print("Year %2d - Predicted cost (rates day %0.2f night %0.2f): %0.2f base cost %0.2f saving %0.2f - Total saving: %0.2f" % (year, CONFIG['PRICE_DAY'], CONFIG['PRICE_NIGHT'], annual_cost, base_cost_year, base_cost_year - annual_cost, base_cost - total_cost - CONFIG['EQUIPMENT_COST']))
 
         # Annual adjustments
         CONFIG['BATTERY_SIZE'] *= CONFIG['ANNUAL_BATTERY_LOSS'] # Loss of battery capacity
         CONFIG['PRICE_DAY']    *= CONFIG['INFLATION'] # Inflation for electric costs
         CONFIG['PRICE_NIGHT']  *= CONFIG['INFLATION'] # Inflation for electric costs
+
+        # Add batteries annually
+        if (CONFIG['BATTERY_GROW'] and (CONFIG['BATTERY_SIZE'] + CONFIG['BATTERY_GROW']) <= CONFIG['BATTERY_MAX']):
+            CONFIG['BATTERY_SIZE'] += CONFIG['BATTERY_GROW']
+            CONFIG['EQUIPMENT_COST'] += CONFIG['BATTERY_GROW_COST']
+  
+def main():
+
+    parser = argparse.ArgumentParser(description='Solar and battery simulator')
+    parser.add_argument('config', help='yml configuration file name')
+    for item in CONFIG:
+        parser.add_argument('--' + item, action='store', required=False, default=None)
+    args = parser.parse_args()
+    
+    # Read config and override defaults
+    with open(args.config, 'r') as fhan:
+        yconfig = yaml.safe_load(fhan)
+        for item in yconfig:
+            CONFIG[item] = yconfig[item]
+
+
+    # Command line overrides
+    for item in CONFIG:
+        if item in args:
+            value = getattr(args, item)
+            if value:
+                if isinstance(CONFIG[item], (int, float)):
+                    CONFIG[item] = float(value)
+                elif isinstance(CONFIG[item], bool):
+                    CONFIG[item] = bool(value)
+                else:
+                    CONFIG[item] = value
+
+    # Show configuration
+    print(CONFIG)
+
+    # Run a simulation
+    simulate()
 
 if __name__ == "__main__":
     main()
