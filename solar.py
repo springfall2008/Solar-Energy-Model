@@ -10,6 +10,7 @@ from datetime import timedelta
 import math
 import yaml
 import argparse
+import sys
 
 # Default configuration - overriden by YML
 CONFIG = {
@@ -35,6 +36,7 @@ CONFIG = {
     'EQUIPMENT_COST' : 0,
     'YEARS' : 15,
     'PROFILE' : [5.41, 8.82, 8.75, 7.21, 5.07, 3.32, 2.38, 3.07, 3.91, 3.99, 4.06, 4.38, 4.34, 3.43, 3.74, 3.75, 4.54, 4.93, 3.77, 3.08, 2.62, 2.55, 2.08, 0.81],
+    'CONSUMPTION' : None,
     'ANNUAL_USAGE': 9915.0,
     'SUNRISE': "sunrise.txt"
 }
@@ -203,7 +205,7 @@ class cl_load:
             profile_sum += profile[hour]
         for hour in range(24):
             profile[hour] = profile[hour] / profile_sum * 100.0
-            
+
         for day in range(1, 365+1):
             self.data[day] = {}
             for hour in range(24):
@@ -420,6 +422,9 @@ def main():
     with open(args.config, 'r') as fhan:
         yconfig = yaml.safe_load(fhan)
         for item in yconfig:
+            if item not in CONFIG:
+                print("ERROR: Bad configuration option in YML %s does not exist" % item)
+                return(1)
             CONFIG[item] = yconfig[item]
 
 
@@ -440,6 +445,7 @@ def main():
 
     # Run a simulation
     simulate()
+    return 0
 
 if __name__ == "__main__":
-    main()
+    exit(main())
