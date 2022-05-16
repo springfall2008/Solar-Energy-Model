@@ -16,7 +16,21 @@ EQUIPMENT_COST: 8750          # Cost to install your equipment in £
 ANNUAL_BATTERY_LOSS: 0.984    # Annual loss of battery capacity
 YEARS: 15                     # Years to run the scenario for
 SUNRISE: sunrise.txt          # Sunrise data text file
-CONSUMPTION: consumption.csv  # Octupus consumption CSV data - at least 1 years worth - or remove this to use profile
 
-PROFILE: [1,1,1,1,1,1,2,5,5,5,4,4,7,5,3,2,3,4,5,5,4,4,4,2] # Alternative to having consumption data, this gives a profile of the energy use per hour
+# Example using a CSV downloaded from the Octopus web site
+#
+CONSUMPTION: consumption.csv  # Octupus consumption CSV data (only used in CSV mode) - at least 1 years worth
+
+# Example profile created from Octopus data, with night charging of a car
+# Values are per hour (24 figures one per hour) giving a relative percentage of usage on that hour (does not need to add up to 100)
+# Scaled against annual usage data
+#
+PROFILE: [5.41, 8.82, 8.75, 7.21, 5.07, 3.32, 2.38, 3.07, 3.91, 3.99, 4.06, 4.38, 4.34, 3.43, 3.74, 3.75, 4.54, 4.93, 3.77, 3.08, 2.62, 2.55, 2.08, 0.81]
 ANNUAL_USAGE: 9000            # KwH usage for the profile, only applies if you don't supply the CSV                 
+
+# Example of Octopus API MODE
+API_KEY: "sk_live_xxxxxxxxxxxx" # API KEY taken from your octopus account
+API_MPAN: "2200099999999"        # Meter code taken from your octopus account
+APU_SERIAL: "20L9999999"         # Meter serial taken from your octopus account
+
+

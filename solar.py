@@ -11,6 +11,9 @@ import math
 import yaml
 import argparse
 import sys
+import urllib.request
+import json
+import re
 
 # Default configuration - overriden by YML
 CONFIG = {
@@ -35,10 +38,14 @@ CONFIG = {
     'INFLATION' : 1.03,
     'EQUIPMENT_COST' : 0,
     'YEARS' : 15,
-    'PROFILE' : [5.41, 8.82, 8.75, 7.21, 5.07, 3.32, 2.38, 3.07, 3.91, 3.99, 4.06, 4.38, 4.34, 3.43, 3.74, 3.75, 4.54, 4.93, 3.77, 3.08, 2.62, 2.55, 2.08, 0.81],
-    'CONSUMPTION' : None,
-    'ANNUAL_USAGE': 9915.0,
-    'SUNRISE': "sunrise.txt"
+    'PROFILE' : [1,1,1,1,1,1,2,5,5,5,4,4,7,5,3,2,3,4,5,5,4,4,4,2],
+    'CONSUMPTION' : "consumption.csv",
+    'ANNUAL_USAGE': 6000.0,
+    'SUNRISE': "sunrise.txt",
+    'API_KEY' : None,
+    'API_MPAN' : None,
+    'API_SERIAL' : None,
+    'API_CONSUMPTION' : "https://api.octopus.energy/v1/electricity-meter-points/%s/meters/%s/consumption/?page_size=20000",
 }
 
 class cl_logger:
@@ -213,6 +220,7 @@ class cl_load:
                 self.data[day][hour] = usage
 
     def load_csv(self, filename):
+        results = []
         with open(filename, 'r') as han:
             last_hour = -1
             for line in han:
@@ -220,33 +228,48 @@ class cl_load:
                     line = line.strip()
                     fields = line.split(',')
                     if not fields[0].startswith('Consumption'):
-                        energy = float(fields[0])
-                        start_date, start_time = fields[1].split('T')
-                        end_date, end_time = fields[2].split('T')
-                        start_time, offset_time = start_time.split('+')
-                        end_time, offset_end_time = end_time.split('+')
-                        start = datetime.strptime(start_date.strip() + " " + start_time, '%Y-%m-%d %H:%M:%S')
-                        end   = datetime.strptime(end_date.strip()   + " " + end_time,   '%Y-%m-%d %H:%M:%S')
+                        point = {}
+                        point['consumption'] = float(fields[0])
+                        point['interval_start'] = fields[1]
+                        point['interval_end'] = fields[2]
+                        results.append(point)
+        return results
 
-                        day_of_year = start.timetuple().tm_yday
-                        hour_of_day_start = start.hour
-                        hour_of_day_end = end.hour
-                        hours = hour_of_day_end - hour_of_day_start
-                        if (hours == 0):
-                            hours = 1
+    def process_results(self, results):
+        """
+        Change octoput results into data points
+        """
+        for result in results:
+            istart = result['interval_start']
+            iend   = result['interval_end']
+            energy = result['consumption']
 
-                        for hour in range(hour_of_day_start, hour_of_day_start + hours):
-                            if day_of_year not in self.data:
-                                self.data[day_of_year] = {}
-                            if hour not in self.data[day_of_year]:
-                                self.data[day_of_year][hour] = energy / hours
-                            elif last_hour == hour_of_day_start:
-                                self.data[day_of_year][hour] += energy / hours
-                            else:
-                                # If the data covers multiple years use the latest only
-                                self.data[day_of_year][hour] = energy / hours
+            start_date, start_time = istart.split('T')
+            end_date, end_time = iend.split('T')
+            start_time, offset_time = re.split('\+|Z', start_time)
+            end_time, offset_end_time = re.split('\+|Z', end_time)
+            start = datetime.strptime(start_date.strip() + " " + start_time, '%Y-%m-%d %H:%M:%S')
+            end   = datetime.strptime(end_date.strip()   + " " + end_time,   '%Y-%m-%d %H:%M:%S')
 
-                        last_hour = hour_of_day_start
+            day_of_year = start.timetuple().tm_yday
+            hour_of_day_start = start.hour
+            hour_of_day_end = end.hour
+            hours = hour_of_day_end - hour_of_day_start
+            if (hours == 0):
+                hours = 1
+
+            for hour in range(hour_of_day_start, hour_of_day_start + hours):
+                if day_of_year not in self.data:
+                    self.data[day_of_year] = {}
+                if hour not in self.data[day_of_year]:
+                    self.data[day_of_year][hour] = energy / hours
+                elif last_hour == hour_of_day_start:
+                    self.data[day_of_year][hour] += energy / hours
+                else:
+                    # If the data covers multiple years use the latest only
+                    self.data[day_of_year][hour] = energy / hours
+
+                last_hour = hour_of_day_start
     
     def validate_data(self, show):
         self.hourly = [0 for i in range(24)]
@@ -278,12 +301,17 @@ class cl_load:
                 print(vstr, end="")
             print()
 
-    def __init__(self, filename, show, profile=None, total=3000.0):
-        self.data = {}
+    def reset(self):
         self.total_used = 0
+
+    def __init__(self, filename, show, profile=None, total=3000.0, apimode=False):
+        self.data = {}
+        self.reset()
         
-        if filename:
-            self.load_csv(filename)
+        if apimode:
+            self.process_results(self.load_api())
+        elif filename:
+            self.process_results(self.load_csv(filename))
         else:
             self.create_profile(profile, total)
         self.validate_data(show)
@@ -297,9 +325,46 @@ class cl_load:
         return 0
 
     def show(self):
-        print ("Total engery load used %lf kWh" % self.total_used)
+        print ("Total energy load used %lf kWh" % self.total_used)
 
-def run_scenario(show=True):
+    def set_api(self, api):
+        print ("Login to api %s" % api)
+        uname = CONFIG['API_KEY']
+        password_mgr = urllib.request.HTTPPasswordMgrWithDefaultRealm()
+        password_mgr.add_password(None, api, uname, '')
+        handler = urllib.request.HTTPBasicAuthHandler(password_mgr)
+        opener = urllib.request.build_opener(handler)
+        opener.open(api)
+        urllib.request.install_opener(opener)
+
+    def load_api(self, maxpoints=365*24*2):
+        """
+        Fetch consumption data from Octopus API
+        """
+        results = []
+
+        if (not CONFIG['API_KEY']) or (not CONFIG['API_MPAN']) or (not CONFIG['API_SERIAL']):
+            print("ERROR: You must set API_KEY, API_MPAN and API_SERIAL to load from Octopus API")
+            exit(1)
+
+        api = CONFIG['API_CONSUMPTION'] % (CONFIG['API_MPAN'], CONFIG['API_SERIAL'])
+        self.set_api(api)
+
+        while api and len(results) < maxpoints:
+            print("Fetching %s" % api)
+            with urllib.request.urlopen(api) as url:
+                tdata = url.read()
+                data = json.loads(tdata)
+                if 'results' in data:
+                    results += data['results']
+                if 'next' in data:
+                    api = data['next']
+                else:
+                    api = None
+        print("Downloaded %d data points" % len(results))
+        return results
+
+def run_scenario(show, load):
     if show:
         print ("---------- BATTERY %f SOLAR %f COST %0.2f--------" % (CONFIG['BATTERY_SIZE'], CONFIG['SOLAR_SIZE'], CONFIG['EQUIPMENT_COST']))
 
@@ -317,11 +382,8 @@ def run_scenario(show=True):
     # Sunrise data
     sun = cl_sun(CONFIG['SUNRISE'])
 
-    # Octopus data
-    if 'CONSUMPTION' in CONFIG:
-        load = cl_load(CONFIG['CONSUMPTION'], show)
-    else:
-        load = cl_load(None, show, profile=CONFIG['PROFILE'], total=CONFIG['ANNUAL_USAGE'])
+    # Reset load data
+    load.reset()
 
     # Create grid
     grid = cl_grid()
@@ -379,22 +441,31 @@ def run_scenario(show=True):
 
     return grid.cost
 
-def simulate():
+def simulate(mode):
     total_cost = 0
     base_cost = 0
     year = 0
+
+    # Octopus data or profiled load?
+    if mode.lower() == 'api':
+        load = cl_load(None, True, apimode=True)
+    elif mode.lower() == 'csv':
+        load = cl_load(CONFIG['CONSUMPTION'], True)
+    else:
+        load = cl_load(None, True, profile=CONFIG['PROFILE'], total=CONFIG['ANNUAL_USAGE'])
+
     while year < CONFIG['YEARS']:
         tempb = CONFIG['BATTERY_SIZE']
         temps = CONFIG['SOLAR_SIZE']
         CONFIG['BATTERY_SIZE'] = 0
         CONFIG['SOLAR_SIZE'] = 0
 
-        base_cost_year = run_scenario(False)
+        base_cost_year = run_scenario(False, load=load)
         base_cost += base_cost_year
 
         CONFIG['BATTERY_SIZE'] = tempb
         CONFIG['SOLAR_SIZE'] = temps
-        annual_cost = run_scenario(year==0)
+        annual_cost = run_scenario(year==0, load=load)
         total_cost += annual_cost
         year += 1
 
@@ -409,11 +480,12 @@ def simulate():
         if (CONFIG['BATTERY_GROW'] and (CONFIG['BATTERY_SIZE'] + CONFIG['BATTERY_GROW']) <= CONFIG['BATTERY_MAX']):
             CONFIG['BATTERY_SIZE'] += CONFIG['BATTERY_GROW']
             CONFIG['EQUIPMENT_COST'] += CONFIG['BATTERY_GROW_COST']
-  
+
 def main():
 
     parser = argparse.ArgumentParser(description='Solar and battery simulator')
     parser.add_argument('config', help='yml configuration file name')
+    parser.add_argument('mode', help='Set the data mode which can be csv|api|profile')
     for item in CONFIG:
         parser.add_argument('--' + item, action='store', required=False, default=None)
     args = parser.parse_args()
@@ -444,7 +516,7 @@ def main():
     print(CONFIG)
 
     # Run a simulation
-    simulate()
+    simulate(args.mode)
     return 0
 
 if __name__ == "__main__":
