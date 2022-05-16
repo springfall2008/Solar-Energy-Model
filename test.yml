@@ -4,7 +4,7 @@ BATTERY_SIZE: 4.8             # Battery size in kwh
 BATTERY_DOD: 0.9              # Battery depth of discharge
 BATTERY_LOSS: 0.96            # Loss of energy between charging and discharging the battery
 BATTERY_PEAK_DRAW: 3.0        # Inverter size on the battery
-BATTERY_MAX_CHARGE_RATE: 3.0 # Peak Battery charge rate, usually inverter size
+BATTERY_MAX_CHARGE_RATE: 3.0  # Peak Battery charge rate, usually inverter size
 BATTERY_CHARGE_NIGHT: True    # When true the battery tries to charge at night rate
 NIGHT_START: 1                # Hour that night rate electricty starts e.g. 1 = am
 NIGHT_END: 5                  # Hour that night rate electricty has ended, e.g. 5 means ends at 4:59am
@@ -26,11 +26,11 @@ CONSUMPTION: consumption.csv  # Octupus consumption CSV data (only used in CSV m
 # Scaled against annual usage data
 #
 PROFILE: [5.41, 8.82, 8.75, 7.21, 5.07, 3.32, 2.38, 3.07, 3.91, 3.99, 4.06, 4.38, 4.34, 3.43, 3.74, 3.75, 4.54, 4.93, 3.77, 3.08, 2.62, 2.55, 2.08, 0.81]
-ANNUAL_USAGE: 9000            # KwH usage for the profile, only applies if you don't supply the CSV                 
+ANNUAL_USAGE: 9000               # KwH usage for the profile, only applies in profile mode              
 
 # Example of Octopus API MODE
-API_KEY: "sk_live_xxxxxxxxxxxx" # API KEY taken from your octopus account
+API_KEY: "sk_live_xxxxxxxxxxxx"  # API KEY taken from your octopus account
 API_MPAN: "2200099999999"        # Meter code taken from your octopus account
-APU_SERIAL: "20L9999999"         # Meter serial taken from your octopus account
+API_SERIAL: "20L9999999"         # Meter serial taken from your octopus account
 
 
