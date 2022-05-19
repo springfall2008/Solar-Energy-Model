@@ -46,7 +46,22 @@ CONFIG = {
     'API_MPAN' : None,
     'API_SERIAL' : None,
     'API_CONSUMPTION' : "https://api.octopus.energy/v1/electricity-meter-points/%s/meters/%s/consumption/?page_size=20000",
+    'API_ACCOUNT' : "https://api.octopus.energy/v1/accounts/%s/"
 }
+
+def is_night_rate(hour):
+    nstart = CONFIG['NIGHT_START']
+    nend = CONFIG['NIGHT_END']
+    if nstart <= nend:
+        if hour >= nstart and hour < nend:
+            return True
+        else:
+            return False
+    else:
+        if hour >= nstart or hour < nend:
+            return True
+        else:
+            return False
 
 class cl_logger:
     def __init__(self, filename):
@@ -182,7 +197,7 @@ class cl_grid:
     def draw(self, load, hour):
         if load > 0:
             self.total_drawn += load
-            if (hour >= CONFIG['NIGHT_START'] and hour < CONFIG['NIGHT_END']):
+            if is_night_rate(hour):
                 self.cost += self.price_night * load
                 self.cost_night += self.price_night * load
                 self.draw_night += load
@@ -411,14 +426,14 @@ def run_scenario(show, load):
                   log.row("Spare", day, hour, use, solar_energy, spare_energy - left_over_energy, -left_over_energy, battery.charge)
             else:
                 # Charge battery on cheap rate?
-                if hour >= CONFIG['NIGHT_START'] and hour <= CONFIG['NIGHT_END'] and CONFIG['BATTERY_CHARGE_NIGHT']:
+                if is_night_rate(hour) and CONFIG['BATTERY_CHARGE_NIGHT']:
                     to_battery = min(battery.can_charge(), CONFIG['BATTERY_MAX_CHARGE_RATE']) # max charge rate
                     grid.draw(to_battery - spare_energy, hour)
                     battery.do_charge(to_battery)
                     if show:      
                         log.row("Night", day, hour, use, solar_energy, to_battery, to_battery - spare_energy, battery.charge)
                 else:
-                    if hour >= CONFIG['NIGHT_START'] and hour <= CONFIG['NIGHT_END']:
+                    if is_night_rate(hour):
                         # draw from grid
                         balance_energy = -spare_energy
                     else:
@@ -469,7 +484,7 @@ def simulate(mode):
         total_cost += annual_cost
         year += 1
 
-        print("Year %2d - Predicted cost (rates day %0.2f night %0.2f): %0.2f base cost %0.2f saving %0.2f - Total saving: %0.2f" % (year, CONFIG['PRICE_DAY'], CONFIG['PRICE_NIGHT'], annual_cost, base_cost_year, base_cost_year - annual_cost, base_cost - total_cost - CONFIG['EQUIPMENT_COST']))
+        print("Year %2d - Rates day %0.2f night %0.2f Cost: %0.2f (%0.2f total) Base cost: %0.2f (%0.2f total) Saving %0.2f (total %0.2f)" % (year, CONFIG['PRICE_DAY'], CONFIG['PRICE_NIGHT'], annual_cost, total_cost, base_cost_year, base_cost, base_cost_year - annual_cost, base_cost - total_cost - CONFIG['EQUIPMENT_COST']))
 
         # Annual adjustments
         CONFIG['BATTERY_SIZE'] *= CONFIG['ANNUAL_BATTERY_LOSS'] # Loss of battery capacity
