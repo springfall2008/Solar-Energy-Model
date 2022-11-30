@@ -33,6 +33,7 @@ CONFIG = {
     'PRICE_DAY' : 0.30,
     'PRICE_NIGHT' : 0.075,
     'PRICE_FEEDIN' : 0.04,
+    'PRICE_NIGHT_TRACKS' : False,
     'DYNAMIC_CHARGE' : 0,
     'ANNUAL_BATTERY_LOSS' : 0.984,
     'INFLATION' : 1.03,
@@ -66,10 +67,10 @@ def is_night_rate(hour):
 class cl_logger:
     def __init__(self, filename):
         self.han = open(filename, 'w')
-        self.han.write("mode, day, hour, load, solar_produce, charge_battery, draw_grid, battery_level\n")
+        self.han.write("mode, day, hour, load, solar_produce, charge_battery, draw_grid, battery_level, cost\n")
     
-    def row(self, mode, day, hour, load, produce, charge, grid, battery):
-        self.han.write("%s, %d, %d, %f, %f, %f, %f, %f\n" % (mode, day, hour, load, produce, charge, grid, battery))
+    def row(self, mode, day, hour, load, produce, charge, grid, battery, cost):
+        self.han.write("%s, %d, %d, %f, %f, %f, %f, %f, %0.2f\n" % (mode, day, hour, load, produce, charge, grid, battery, cost))
 
 class cl_battery:
     """ Battery model """
@@ -423,7 +424,7 @@ def run_scenario(show, load):
               if left_over_energy > 0:
                   grid.draw(-left_over_energy, hour)        
               if show:      
-                  log.row("Spare", day, hour, use, solar_energy, spare_energy - left_over_energy, -left_over_energy, battery.charge)
+                  log.row("Spare", day, hour, use, solar_energy, spare_energy - left_over_energy, -left_over_energy, battery.charge, grid.cost)
             else:
                 # Charge battery on cheap rate?
                 if is_night_rate(hour) and CONFIG['BATTERY_CHARGE_NIGHT']:
@@ -431,7 +432,7 @@ def run_scenario(show, load):
                     grid.draw(to_battery - spare_energy, hour)
                     battery.do_charge(to_battery)
                     if show:      
-                        log.row("Night", day, hour, use, solar_energy, to_battery, to_battery - spare_energy, battery.charge)
+                        log.row("Night", day, hour, use, solar_energy, to_battery, to_battery - spare_energy, battery.charge, grid.cost)
                 else:
                     if is_night_rate(hour):
                         # draw from grid
@@ -443,7 +444,7 @@ def run_scenario(show, load):
                         # Buy from grid?
                         grid.draw(balance_energy, hour)
                     if show:      
-                        log.row("Day", day, hour, use, solar_energy, balance_energy + spare_energy, balance_energy, battery.charge)
+                        log.row("Day", day, hour, use, solar_energy, balance_energy + spare_energy, balance_energy, battery.charge, grid.cost)
                 
             hour += 1
         day += 1
@@ -488,8 +489,12 @@ def simulate(mode):
 
         # Annual adjustments
         CONFIG['BATTERY_SIZE'] *= CONFIG['ANNUAL_BATTERY_LOSS'] # Loss of battery capacity
+        night_diff = CONFIG['PRICE_DAY'] - CONFIG['PRICE_NIGHT']
         CONFIG['PRICE_DAY']    *= CONFIG['INFLATION'] # Inflation for electric costs
-        CONFIG['PRICE_NIGHT']  *= CONFIG['INFLATION'] # Inflation for electric costs
+        if CONFIG['PRICE_NIGHT_TRACKS']:
+            CONFIG['PRICE_NIGHT'] = CONFIG['PRICE_DAY'] - night_diff
+        else:
+            CONFIG['PRICE_NIGHT']  *= CONFIG['INFLATION'] # Inflation for electric costs
 
         # Add batteries annually
         if (CONFIG['BATTERY_GROW'] and (CONFIG['BATTERY_SIZE'] + CONFIG['BATTERY_GROW']) <= CONFIG['BATTERY_MAX']):
