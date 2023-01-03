@@ -27,6 +27,7 @@ CONSUMPTION: consumption.csv  # Octupus consumption CSV data (only used in CSV m
 #
 PROFILE: [5.41, 8.82, 8.75, 7.21, 5.07, 3.32, 2.38, 3.07, 3.91, 3.99, 4.06, 4.38, 4.34, 3.43, 3.74, 3.75, 4.54, 4.93, 3.77, 3.08, 2.62, 2.55, 2.08, 0.81]
 ANNUAL_USAGE: 9000               # KwH usage for the profile, only applies in profile mode              
+PROFILE_BACKFILL: False          # When true use the profile just to fill holes in the real data 
 
 # Example of Octopus API MODE
 API_KEY: "sk_live_xxxxxxxxxxxx"  # API KEY taken from your octopus account
