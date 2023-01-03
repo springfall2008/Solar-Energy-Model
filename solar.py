@@ -66,12 +66,41 @@ def is_night_rate(hour):
             return False
 
 class cl_logger:
-    def __init__(self, filename):
+    def __init__(self, filename, filename_day):
+        self.cost_prev = 0
         self.han = open(filename, 'w')
+        self.hand = open(filename_day, 'w')
         self.han.write("mode, day, hour, load, solar_produce, charge_battery, draw_grid, battery_level, target_charge_level, battery_undersize, cost\n")
-    
+        self.hand.write("day, day_kwh, night_kwh, cost_day, cost_night\n")
+        self.reset_day()
+
+    def reset_day(self):
+        self.day_kwh = 0
+        self.day_cost = 0
+        self.night_kwh = 0
+        self.night_cost = 0
+
     def row(self, mode, day, hour, load, produce, charge, grid, battery, target_charge_level, battery_undersize, cost):
         self.han.write("%s, %d, %d, %f, %f, %f, %f, %f, %f, %f, %0.2f\n" % (mode, day, hour, load, produce, charge, grid, battery, target_charge_level, battery_undersize, cost))
+
+        if (hour == 0):
+            self.reset_day()
+
+        if (mode == "Night"):
+            self.night_cost += cost - self.cost_prev
+            self.night_kwh += grid
+        else:
+            self.day_kwh += grid
+            self.day_cost += cost - self.cost_prev
+
+        if (hour == 23):
+            self.row_day(day, self.day_kwh, self.night_kwh, self.day_cost, self.night_cost)
+
+        # Grid cost is total for the year 
+        self.cost_prev = cost
+
+    def row_day(self, day, daykw, nightkw, cost_day, cost_night):
+        self.hand.write(("%d, %f, %f, %f, %f\n") % (day, daykw, nightkw, cost_day, cost_night))
 
 class cl_battery:
     """ Battery model """
@@ -232,9 +261,8 @@ class cl_load:
 
     def load(self, kw):
         self.total_used += kw
-
+    
     def create_profile(self, profile, total, create_day=None):
-
         profile_sum = 0.0
         for hour in range(24):
             profile_sum += profile[hour]
@@ -402,12 +430,14 @@ class cl_load:
         print("Downloaded %d data points" % len(results))
         return results
 
-def run_scenario(show, load):
+def run_scenario(show, show_base, load):
     if show:
         print ("---------- BATTERY %f SOLAR %f COST %0.2f--------" % (CONFIG['BATTERY_SIZE'], CONFIG['SOLAR_SIZE'], CONFIG['EQUIPMENT_COST']))
 
     if show:
-        log = cl_logger("data_bat%f_sol%f.csv"  % (CONFIG['BATTERY_SIZE'], CONFIG['SOLAR_SIZE']))
+        log = cl_logger("data_bat%f_sol%f.csv"  % (CONFIG['BATTERY_SIZE'], CONFIG['SOLAR_SIZE']), "data_bat%f_sol%f_daily.csv"  % (CONFIG['BATTERY_SIZE'], CONFIG['SOLAR_SIZE']))
+    elif show_base:
+        log = cl_logger("data_baseline.csv", "data_baseline_daily.csv")
     else:
         log = None
 
@@ -445,7 +475,7 @@ def run_scenario(show, load):
               # Feed in?
               if left_over_energy > 0:
                   grid.draw(-left_over_energy, hour)        
-              if show:      
+              if log:      
                   log.row("Spare", day, hour, use, solar_energy, spare_energy - left_over_energy, -left_over_energy, battery.charge, battery.target_charge_level, battery.undersize, grid.cost)
             else:
                 # Charge battery on cheap rate?
@@ -453,7 +483,7 @@ def run_scenario(show, load):
                     to_battery = min(battery.can_charge(), CONFIG['BATTERY_MAX_CHARGE_RATE']) # max charge rate
                     grid.draw(to_battery - spare_energy, hour)
                     battery.do_charge(to_battery)
-                    if show:      
+                    if log:      
                         log.row("Night", day, hour, use, solar_energy, to_battery, to_battery - spare_energy, battery.charge, battery.target_charge_level, battery.undersize, grid.cost)
                 else:
                     if is_night_rate(hour):
@@ -466,7 +496,7 @@ def run_scenario(show, load):
                         # Buy from grid?
                         grid.draw(balance_energy, hour)
                         battery.track_undersize(balance_energy, hour)
-                    if show:      
+                    if log:      
                         log.row("Day", day, hour, use, solar_energy, balance_energy + spare_energy, balance_energy, battery.charge, battery.target_charge_level, battery.undersize, grid.cost)
                 
             hour += 1
@@ -499,12 +529,12 @@ def simulate(mode):
         CONFIG['BATTERY_SIZE'] = 0
         CONFIG['SOLAR_SIZE'] = 0
 
-        base_cost_year = run_scenario(False, load=load)
+        base_cost_year = run_scenario(False, True, load=load)
         base_cost += base_cost_year
 
         CONFIG['BATTERY_SIZE'] = tempb
         CONFIG['SOLAR_SIZE'] = temps
-        annual_cost = run_scenario(year==0, load=load)
+        annual_cost = run_scenario(year==0, False, load=load)
         total_cost += annual_cost
         year += 1
 
